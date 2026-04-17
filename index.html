@@ -298,6 +298,7 @@ function App() {
   const [velgRettForDag,setVelgRettForDag]=useState(null);
   const [velgDagForRett,setVelgDagForRett]=useState(null);
   const [visNyRett,setVisNyRett]=useState(false);
+  const [visProfilMeny,setVisProfilMeny]=useState(false);
 
   const realtimeRef=useRef(null);
 
@@ -477,6 +478,72 @@ function App() {
 
   const toastFarger={success:farger.toastOk,feil:farger.toastFeil,info:farger.toastInfo};
 
+  // ── Profil-meny komponent ──
+  function ProfilMeny({onLukk}) {
+    const [navn,setNavn]=useState(bruker.user_metadata?.full_name||"");
+    const [epost,setEpost]=useState(bruker.email||"");
+    const [laster,setLaster]=useState(false);
+    const [lagret,setLagret]=useState(false);
+
+    const lagreEndringer = async () => {
+      setLaster(true);
+      const oppdateringer={};
+      if(epost!==bruker.email) oppdateringer.email=epost;
+      if(navn!==(bruker.user_metadata?.full_name||"")) oppdateringer.data={full_name:navn};
+      if(Object.keys(oppdateringer).length>0){
+        const {error}=await sb.auth.updateUser(oppdateringer);
+        if(error) visToast("Feil ved lagring","feil");
+        else { visToast("Profil oppdatert ✓"); setLagret(true); }
+      }
+      setLaster(false);
+    };
+
+    const inp={width:"100%",padding:"14px 16px",borderRadius:14,border:`1px solid ${farger.inputkant}`,fontSize:15,fontFamily:"sans-serif",background:farger.panel,color:farger.tekst,outline:"none",boxSizing:"border-box"};
+
+    return (
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onLukk}>
+        <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,background:farger.modalBakgrunn,borderRadius:"24px 24px 0 0",padding:"28px 20px 48px"}}>
+          <div style={{width:40,height:4,background:farger.kant,borderRadius:2,margin:"0 auto 24px"}}/>
+
+          {/* Profilbilde/avatar */}
+          <div style={{textAlign:"center",marginBottom:24}}>
+            <div style={{width:72,height:72,borderRadius:"50%",background:farger.aksentGradient,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:28,marginBottom:10}}>
+              {(bruker.user_metadata?.full_name||bruker.email||"?")[0].toUpperCase()}
+            </div>
+            <p style={{margin:0,fontFamily:"sans-serif",fontSize:13,color:farger.tekstSvak}}>{bruker.email}</p>
+          </div>
+
+          {/* Navn */}
+          <div style={{marginBottom:12}}>
+            <p style={{margin:"0 0 6px 2px",fontFamily:"sans-serif",fontSize:12,fontWeight:700,color:farger.tekstSekundær,textTransform:"uppercase",letterSpacing:0.8}}>Navn</p>
+            <input style={inp} placeholder="Ditt navn" value={navn} onChange={e=>setNavn(e.target.value)}/>
+          </div>
+
+          {/* E-post */}
+          <div style={{marginBottom:20}}>
+            <p style={{margin:"0 0 6px 2px",fontFamily:"sans-serif",fontSize:12,fontWeight:700,color:farger.tekstSekundær,textTransform:"uppercase",letterSpacing:0.8}}>E-postadresse</p>
+            <input style={inp} type="email" placeholder="din@epost.no" value={epost} onChange={e=>setEpost(e.target.value)}/>
+          </div>
+
+          {/* Lagre */}
+          <button onClick={lagreEndringer} disabled={laster} style={{width:"100%",padding:"14px",borderRadius:16,border:"none",background:farger.aksentGradient,color:"white",fontFamily:"sans-serif",fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:12,boxShadow:"0 2px 8px rgba(232,93,47,0.3)"}}>
+            {laster?"Lagrer...":(lagret?"✓ Lagret":"Lagre endringer")}
+          </button>
+
+          {/* Mørkt/lyst tema */}
+          <button onClick={()=>setTema(t=>t==="lys"?"mørk":"lys")} style={{width:"100%",padding:"14px",borderRadius:16,border:`1px solid ${farger.kant}`,background:"transparent",color:farger.tekst,fontFamily:"sans-serif",fontSize:15,fontWeight:600,cursor:"pointer",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+            {tema==="mørk"?<>☀️ Bytt til lyst tema</>:<>🌙 Bytt til mørkt tema</>}
+          </button>
+
+          {/* Logg ut */}
+          <button onClick={()=>{sb.auth.signOut();onLukk();}} style={{width:"100%",padding:"14px",borderRadius:16,border:`1px solid ${farger.aksent}44`,background:"transparent",color:farger.aksent,fontFamily:"sans-serif",fontSize:15,fontWeight:600,cursor:"pointer"}}>
+            🚪 Logg ut
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{minHeight:"100vh",background:farger.bakgrunn,fontFamily:"Georgia,serif",position:"relative"}}>
       <div style={{position:"fixed",inset:0,backgroundImage:farger.overlay,pointerEvents:"none",zIndex:0}}/>
@@ -487,15 +554,17 @@ function App() {
       {velgDagForRett&&<VelgDagModal matrett={velgDagForRett} ukeplan={ukeplan} onVelg={leggTilMatrett} onLukk={()=>setVelgDagForRett(null)} farger={farger}/>}
       {visNyRett&&<NyRettModal onLagre={lagreEgenRett} onLukk={()=>setVisNyRett(false)} farger={farger}/>}
       {visListeVelger&&<ListeVelger lister={lister} aktivListeId={aktivListe?.id} onVelg={setAktivListe} onNy={opprettListe} onBliMedm={bliMed} farger={farger} onLukk={()=>setVisListeVelger(false)}/>}
+      {visProfilMeny&&<ProfilMeny onLukk={()=>setVisProfilMeny(false)}/>}
 
       <div style={{position:"relative",zIndex:1,maxWidth:520,margin:"0 auto",paddingBottom:100}}>
 
         {/* HEADER */}
         <div style={{padding:"24px 16px 12px",textAlign:"center",position:"relative"}}>
-          <button onClick={()=>setTema(t=>t==="lys"?"mørk":"lys")} style={{position:"absolute",top:24,right:16,width:40,height:40,borderRadius:12,border:`1px solid ${farger.kant}`,background:farger.panel,cursor:"pointer",fontSize:18,boxShadow:farger.skygge}}>
-            {tema==="mørk"?"☀️":"🌙"}
+          <button onClick={()=>setVisProfilMeny(true)} style={{position:"absolute",top:24,right:16,width:40,height:40,borderRadius:12,border:`1px solid ${farger.kant}`,background:farger.panel,cursor:"pointer",fontSize:18,boxShadow:farger.skygge,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontFamily:"sans-serif",fontSize:15,fontWeight:700,color:farger.aksent}}>
+              {(bruker.user_metadata?.full_name||bruker.email||"?")[0].toUpperCase()}
+            </span>
           </button>
-          <button onClick={()=>{ sb.auth.signOut(); }} style={{position:"absolute",top:24,left:16,width:40,height:40,borderRadius:12,border:`1px solid ${farger.kant}`,background:farger.panel,cursor:"pointer",fontSize:16,boxShadow:farger.skygge}} title="Logg ut">👤</button>
           <img src={LOGO_DATA_URI} alt="Kurven" style={{width:220,height:220,objectFit:"contain",marginBottom:0}}/>
         </div>
 
