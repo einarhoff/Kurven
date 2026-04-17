@@ -389,52 +389,76 @@ function App() {
   // ── Varer ──
   const leggTilVare = async () => {
     const navn=nyVare.trim(); if(!navn||!aktivListe) return;
-    const {error}=await sb.from("varer").insert({liste_id:aktivListe.id,navn,ferdig:false,type:"manuell",lagt_til_av:bruker.email});
-    if(error) visToast("Feil","feil");
-    else { setNyVare(""); visToast("Lagt til ✓"); }
+    const tmpId=lagId();
+    // Oppdater lokalt med én gang
+    setVarer(prev=>[...prev,{id:tmpId,liste_id:aktivListe.id,navn,ferdig:false,type:"manuell",lagt_til_av:bruker.email}]);
+    setNyVare("");
+    const {data,error}=await sb.from("varer").insert({liste_id:aktivListe.id,navn,ferdig:false,type:"manuell",lagt_til_av:bruker.email}).select().single();
+    if(error){ visToast("Feil ved lagring","feil"); setVarer(prev=>prev.filter(v=>v.id!==tmpId)); }
+    else { setVarer(prev=>prev.map(v=>v.id===tmpId?data:v)); visToast("Lagt til ✓"); }
   };
 
   const toggleVare = async (vare) => {
+    // Oppdater lokalt med én gang
+    setVarer(prev=>prev.map(v=>v.id===vare.id?{...v,ferdig:!v.ferdig}:v));
     await sb.from("varer").update({ferdig:!vare.ferdig}).eq("id",vare.id);
   };
 
   const fjernFerdige = async () => {
-    const ferdige=varer.filter(v=>v.ferdig).map(v=>v.id);
-    if(ferdige.length===0) return;
-    await sb.from("varer").delete().in("id",ferdige);
+    const ferdigeIds=varer.filter(v=>v.ferdig).map(v=>v.id);
+    if(ferdigeIds.length===0) return;
+    // Oppdater lokalt med én gang
+    setVarer(prev=>prev.filter(v=>!ferdigeIds.includes(v.id)));
+    await sb.from("varer").delete().in("id",ferdigeIds);
     visToast("Ferdige varer fjernet");
   };
 
   const tømHandleliste = async () => {
-    await sb.from("varer").delete().eq("liste_id",aktivListe.id);
+    // Oppdater lokalt med én gang
+    setVarer([]);
     setBekreftTøm(false);
     visToast("Handlelisten er tømt");
+    await sb.from("varer").delete().eq("liste_id",aktivListe.id);
   };
 
   // ── Ukeplan ──
   const leggTilMatrett = async (dag, matrett) => {
+    // Oppdater lokalt med én gang
+    setUkeplan(prev=>({...prev,[dag]:matrett}));
+    setVelgRettForDag(null); setVelgDagForRett(null);
+    visToast(`${matrett.navn} lagt til ${dag} ✓`);
     await sb.from("ukeplan").upsert({liste_id:aktivListe.id,dag,matrett:JSON.stringify(matrett)},{onConflict:"liste_id,dag"});
     // Legg ingredienser til handleliste
     for(const ing of matrett.ingredienser){
       const finnes=varer.find(v=>v.navn.toLowerCase()===ing.navn.toLowerCase());
-      if(!finnes) await sb.from("varer").insert({liste_id:aktivListe.id,navn:`${ing.navn} (${ing.mengde})`,ferdig:false,type:"auto",kilde:matrett.navn,lagt_til_av:bruker.email});
+      if(!finnes){
+        const tmpId=lagId();
+        setVarer(prev=>[...prev,{id:tmpId,liste_id:aktivListe.id,navn:`${ing.navn} (${ing.mengde})`,ferdig:false,type:"auto",kilde:matrett.navn}]);
+        const {data}=await sb.from("varer").insert({liste_id:aktivListe.id,navn:`${ing.navn} (${ing.mengde})`,ferdig:false,type:"auto",kilde:matrett.navn,lagt_til_av:bruker.email}).select().single();
+        if(data) setVarer(prev=>prev.map(v=>v.id===tmpId?data:v));
+      }
     }
-    setVelgRettForDag(null); setVelgDagForRett(null);
-    visToast(`${matrett.navn} lagt til ${dag} ✓`);
   };
 
   const fjernFraDag = async (dag) => {
+    // Oppdater lokalt med én gang
+    setUkeplan(prev=>{ const n={...prev}; delete n[dag]; return n; });
     await sb.from("ukeplan").delete().eq("liste_id",aktivListe.id).eq("dag",dag);
   };
 
   // ── Egne retter ──
   const lagreEgenRett = async (rett) => {
     const {id,...data}=rett;
-    await sb.from("egne_retter").insert({liste_id:aktivListe.id,data:JSON.stringify(data)});
+    const tmpRett={...rett,erEgen:true};
+    setEgneRetter(prev=>[...prev,tmpRett]);
     setVisNyRett(false);
     visToast(`${rett.navn} lagret! ✓`);
+    const {data:lagret}=await sb.from("egne_retter").insert({liste_id:aktivListe.id,data:JSON.stringify(data)}).select().single();
+    if(lagret) setEgneRetter(prev=>prev.map(r=>r.id===rett.id?{...JSON.parse(lagret.data),id:lagret.id,erEgen:true}:r));
   };
+
   const fjernEgenRett = async (id) => {
+    setEgneRetter(prev=>prev.filter(r=>r.id!==id));
     await sb.from("egne_retter").delete().eq("id",id);
   };
 
